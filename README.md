@@ -87,7 +87,7 @@ Then open:
 
 http://localhost:8000
 
-Deployment
+# Deployment
 This app can be deployed easily as a static site on platforms like:
 
 Vercel
@@ -98,7 +98,7 @@ This tool is for informational and educational use only.
 It does not provide legal, immigration, financial, medical, or professional advice.
 Users should always verify important information through official and professional sources before making decisions.
 
-Author
+# Author
 Built from scratch by Imran Shaukat.
 
 I enjoyed building this project and plan to open-source it so others can improve it further.
