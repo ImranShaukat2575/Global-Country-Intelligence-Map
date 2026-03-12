@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Global Country Intelligence Map</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">&#9790;</button>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Interactive Analytics</p>
+        <h1>Global Country Intelligence Map</h1>
+        <p class="subtitle">
+          Hover countries for quick stats, click for deeper insights, compare nations, and export real data.
+        </p>
+      </div>
+      <div class="topbar-actions">
+        <a class="btn subtle" href="about.html">About This App</a>
+        <a class="btn subtle" href="disclaimer.html">Disclaimer</a>
+      </div>
+    </header>
+
+    <section class="controls card">
+      <div class="control-group map-layers-group">
+        <label>Map layers</label>
+        <div id="map-layers-panel" class="map-layers-panel" aria-label="Map layers"></div>
+        <div id="map-layer-explainer" class="map-layer-explainer"></div>
+      </div>
+      <div class="control-group decision-mode-group">
+        <label>Decision mode</label>
+        <div id="decision-mode-panel" class="decision-mode-panel" aria-label="Decision mode"></div>
+        <div id="decision-mode-explainer" class="decision-mode-explainer"></div>
+      </div>
+      <div class="control-group">
+        <label for="metric-select">Map metric</label>
+        <select id="metric-select"></select>
+      </div>
+      <div class="control-group">
+        <label for="region-select">Region</label>
+        <select id="region-select">
+          <option value="all">All regions</option>
+        </select>
+      </div>
+      <div class="control-group stretch">
+        <label for="country-search">Search country</label>
+        <input id="country-search" type="search" placeholder="Type a country name..." />
+      </div>
+      <div class="control-group year-slider-group">
+        <label for="year-slider">Year: <span id="year-label">Latest</span></label>
+        <div class="year-slider-row">
+          <input id="year-slider" type="range" min="2000" max="2024" step="1" value="2024" />
+          <button id="year-play" class="play-btn" aria-label="Play year animation" title="Animate through years">&#9654;</button>
+          <button id="year-latest" class="btn subtle">Latest</button>
+        </div>
+      </div>
+      <div class="control-actions">
+        <button id="share-snapshot" class="btn subtle">Share Snapshot</button>
+        <button id="clear-filters" class="btn subtle">Reset</button>
+        <button id="export-json" class="btn">Export JSON</button>
+        <button id="export-csv" class="btn">Export CSV</button>
+      </div>
+    </section>
+
+    <main class="main-layout">
+      <section class="map-panel card">
+        <div id="map-wrap">
+          <svg id="world-map" aria-label="Interactive world map"></svg>
+          <div id="tooltip" class="tooltip hidden"></div>
+          <div class="zoom-controls">
+            <button id="zoom-in" class="zoom-btn" title="Zoom in">+</button>
+            <button id="zoom-out" class="zoom-btn" title="Zoom out">&minus;</button>
+            <button id="zoom-reset" class="zoom-btn" title="Reset zoom">&#8634;</button>
+          </div>
+        </div>
+        <div id="legend" class="legend"></div>
+        <div class="status-row">
+          <span id="status-text">Loading data...</span>
+          <span id="updated-at"></span>
+        </div>
+      </section>
+
+      <aside class="details-panel card">
+        <div id="country-empty" class="empty-state">
+          <h2>Select a Country</h2>
+          <p>Hover any country for quick stats and click to pin full details here.</p>
+        </div>
+
+        <div id="country-details" class="hidden">
+          <div class="country-head">
+            <img id="country-flag" alt="Country flag" />
+            <div>
+              <h2 id="country-name"></h2>
+              <p id="country-subtitle"></p>
+            </div>
+          </div>
+
+          <nav id="details-jump-menu" class="details-jump-menu" aria-label="Jump to country detail sections">
+            <span class="details-jump-label">Jump to</span>
+            <div class="details-jump-links">
+              <button class="details-jump-link" data-target="country-hero">Overview</button>
+              <button class="details-jump-link" data-target="country-story">Story</button>
+              <button class="details-jump-link" data-target="stat-grid">Stats</button>
+              <button class="details-jump-link" data-target="meta-grid">Profile</button>
+              <button class="details-jump-link" data-target="gdp-trend-section">GDP</button>
+              <button class="details-jump-link" data-target="crime-trend-section">Crime</button>
+              <button class="details-jump-link" data-target="forecast-section">Forecast</button>
+              <button class="details-jump-link" data-target="disaster-section">Disasters</button>
+              <button class="details-jump-link" data-target="hazard-section">Hazards</button>
+              <button class="details-jump-link" data-target="weather-section">Weather</button>
+              <button class="details-jump-link" data-target="visa-section">Visa</button>
+              <button class="details-jump-link" data-target="family-safety-section">Safety</button>
+              <button class="details-jump-link" data-target="job-fit-section">Jobs</button>
+              <button class="details-jump-link" data-target="alternatives-section">Alternatives</button>
+              <button class="details-jump-link" data-target="change-alerts-section">Alerts</button>
+              <button class="details-jump-link" data-target="news-section">News</button>
+            </div>
+          </nav>
+
+          <section id="country-hero" class="country-hero jump-target">
+            <div class="country-hero-main">
+              <div class="country-hero-copy">
+                <p id="country-hero-eyebrow" class="country-hero-eyebrow"></p>
+                <p id="country-hero-summary" class="country-hero-summary"></p>
+                <div id="country-hero-tags" class="country-hero-tags"></div>
+              </div>
+              <div class="country-hero-pulse">
+                <div id="country-hero-overall-ring" class="hero-ring hero-ring-xl">
+                  <span id="country-hero-overall-value"></span>
+                </div>
+                <p id="country-hero-pulse-label" class="country-hero-pulse-label">Country Pulse</p>
+              </div>
+            </div>
+            <div id="country-hero-metrics" class="country-hero-metrics"></div>
+          </section>
+
+          <section id="country-story" class="country-story jump-target">
+            <div class="country-story-head">
+              <div>
+                <p class="country-story-eyebrow">Country Story Mode</p>
+                <h3 id="country-story-title">What this country feels like on paper</h3>
+              </div>
+              <span id="country-story-badge" class="country-story-badge"></span>
+            </div>
+            <p id="country-story-summary" class="country-story-summary"></p>
+            <div class="country-story-grid">
+              <article class="country-story-card">
+                <p class="country-story-card-k">Strengths</p>
+                <div id="country-story-strengths" class="country-story-list"></div>
+              </article>
+              <article class="country-story-card">
+                <p class="country-story-card-k">Watch-outs</p>
+                <div id="country-story-cautions" class="country-story-list"></div>
+              </article>
+              <article class="country-story-card">
+                <p class="country-story-card-k">Best For</p>
+                <div id="country-story-fit" class="country-story-list"></div>
+              </article>
+            </div>
+          </section>
+
+          <div id="stat-grid" class="stat-grid jump-target"></div>
+          <div id="meta-grid" class="meta-grid jump-target"></div>
+
+          <div id="gdp-trend-section" class="trend-block jump-target">
+            <div class="trend-title-row">
+              <h3>GDP Trend (World Bank)</h3>
+              <button id="refresh-trend" class="btn subtle">Reload trend</button>
+            </div>
+            <svg id="trend-chart" viewBox="0 0 420 210"></svg>
+            <p id="trend-meta" class="trend-meta"></p>
+          </div>
+
+          <div id="crime-trend-section" class="trend-block jump-target">
+            <div class="trend-title-row">
+              <h3>Crime Trend (UN SDG 16.1.1)</h3>
+              <button id="refresh-crime" class="btn subtle">Reload crime</button>
+            </div>
+            <svg id="crime-trend-chart" viewBox="0 0 420 210"></svg>
+            <p id="crime-trend-meta" class="trend-meta"></p>
+          </div>
+
+          <div id="forecast-section" class="trend-block jump-target">
+            <div class="trend-title-row">
+              <h3>Forecast Mode</h3>
+              <button id="forecast-toggle" class="btn subtle">Forecast: Off</button>
+            </div>
+            <div class="forecast-controls">
+              <select id="forecast-metric"></select>
+              <button id="refresh-forecast" class="btn subtle">Recompute</button>
+            </div>
+            <svg id="forecast-chart" viewBox="0 0 420 210"></svg>
+            <p id="forecast-meta" class="trend-meta"></p>
+          </div>
+
+          <div id="disaster-section" class="trend-block jump-target">
+            <div class="trend-title-row">
+              <h3>Natural Disaster Timeline (EM-DAT)</h3>
+              <button id="refresh-disaster" class="btn subtle">Reload timeline</button>
+            </div>
+            <svg id="disaster-chart" viewBox="0 0 420 210"></svg>
+            <p id="disaster-meta" class="trend-meta"></p>
+          </div>
+
+          <div id="hazard-section" class="trend-block jump-target">
+            <div class="trend-title-row">
+              <h3>Natural Hazard Exposure Lens</h3>
+              <button id="refresh-hazard-lens" class="btn subtle">Recompute lens</button>
+            </div>
+            <div id="hazard-lens-body" class="insight-list"></div>
+            <p id="hazard-lens-meta" class="trend-meta"></p>
+          </div>
+
+          <div id="weather-section" class="trend-block jump-target">
+            <div class="trend-title-row">
+              <h3>Live Weather (Open-Meteo)</h3>
+              <button id="refresh-weather" class="btn subtle">Reload weather</button>
+            </div>
+            <div id="weather-body" class="weather-body">
+              <p class="weather-empty">Select a country to load current weather.</p>
+            </div>
+            <p id="weather-meta" class="trend-meta"></p>
+          </div>
+
+          <div id="visa-section" class="trend-block jump-target">
+            <div class="trend-title-row">
+              <h3>Visa + Residency Path Finder</h3>
+              <button id="refresh-visa-path" class="btn subtle">Re-evaluate</button>
+            </div>
+            <div class="insight-controls">
+              <select id="visa-origin-select"></select>
+              <select id="visa-goal-select">
+                <option value="work">Work</option>
+                <option value="study">Study</option>
+                <option value="family">Family move</option>
+                <option value="retire">Retirement</option>
+                <option value="business">Business/investment</option>
+              </select>
+            </div>
+            <div id="visa-path-body" class="insight-list"></div>
+            <p id="visa-path-meta" class="trend-meta"></p>
+          </div>
+
+          <div id="family-safety-section" class="trend-block jump-target">
+            <div class="trend-title-row">
+              <h3>Family Safety Lens</h3>
+              <button id="refresh-family-safety" class="btn subtle">Recompute lens</button>
+            </div>
+            <div id="family-safety-body" class="insight-list"></div>
+            <p id="family-safety-meta" class="trend-meta"></p>
+          </div>
+
+          <div id="job-fit-section" class="trend-block jump-target">
+            <div class="trend-title-row">
+              <h3>Job Market Fit by Profession</h3>
+              <button id="refresh-job-fit" class="btn subtle">Recompute fit</button>
+            </div>
+            <div class="insight-controls">
+              <select id="job-profession-select"></select>
+            </div>
+            <div id="job-fit-body" class="insight-list"></div>
+            <p id="job-fit-meta" class="trend-meta"></p>
+          </div>
+
+          <div id="alternatives-section" class="trend-block jump-target">
+            <div class="trend-title-row">
+              <h3>Best Alternatives Engine</h3>
+              <button id="refresh-alternatives" class="btn subtle">Find alternatives</button>
+            </div>
+            <div class="insight-controls">
+              <select id="alternatives-focus-select">
+                <option value="balanced">Balanced</option>
+                <option value="affordability">Lower cost</option>
+                <option value="safety">Higher safety</option>
+                <option value="jobs">Stronger jobs</option>
+                <option value="resilience">Climate resilience</option>
+              </select>
+              <select id="alternatives-scope-select">
+                <option value="region">Same region</option>
+                <option value="global">Global</option>
+              </select>
+            </div>
+            <div id="alternatives-body" class="insight-list"></div>
+            <p id="alternatives-meta" class="trend-meta"></p>
+          </div>
+
+          <div id="change-alerts-section" class="trend-block jump-target">
+            <div class="trend-title-row">
+              <h3>Country Change Alerts</h3>
+              <button id="refresh-change-alerts" class="btn subtle">Scan changes</button>
+            </div>
+            <div id="change-alerts-body" class="insight-list"></div>
+            <p id="change-alerts-meta" class="trend-meta"></p>
+          </div>
+
+          <div id="news-section" class="news-block jump-target">
+            <div class="news-title-row">
+              <h3>Latest News</h3>
+              <button id="refresh-news" class="btn subtle">Reload news</button>
+            </div>
+            <div id="news-list" class="news-list">
+              <p class="news-loading">Loading news…</p>
+            </div>
+            <p id="news-meta" class="news-meta"></p>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <section class="bottom-layout">
+      <section class="ranking-panel card">
+        <div class="section-head">
+          <h3 id="ranking-title">Top Countries</h3>
+          <p>Click a row to focus that country on the map.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="ranking-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Country</th>
+                <th>Region</th>
+                <th>Value</th>
+                <th>Trend</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="compare-panel card">
+        <div class="section-head">
+          <h3>Country Comparison</h3>
+          <p>Compare two countries across major indicators.</p>
+        </div>
+        <div class="compare-controls">
+          <select id="compare-a"></select>
+          <select id="compare-b"></select>
+        </div>
+        <div class="table-wrap">
+          <table id="compare-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th id="compare-head-a">Country A</th>
+                <th id="compare-head-b">Country B</th>
+                <th>Delta</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="rankings-carousel-panel card">
+      <div class="section-head">
+        <div>
+          <h3 id="rankings-carousel-title">Global Rankings Carousel</h3>
+          <p id="rankings-carousel-subtitle">Browse curated global leaderboards.</p>
+        </div>
+        <div class="carousel-nav">
+          <button id="rankings-carousel-prev" class="btn subtle" aria-label="Previous ranking">&#8592;</button>
+          <button id="rankings-carousel-next" class="btn subtle" aria-label="Next ranking">&#8594;</button>
+        </div>
+      </div>
+      <div id="rankings-carousel-track" class="rankings-carousel-track"></div>
+      <div id="rankings-carousel-dots" class="rankings-carousel-dots"></div>
+    </section>
+
+    <section class="watchlist-panel card">
+      <div class="section-head">
+        <h3>Alert Watchlists</h3>
+        <p>Track selected countries and trigger threshold alerts.</p>
+      </div>
+      <div class="watchlist-controls">
+        <button id="watchlist-add-country" class="btn subtle">Add Selected Country</button>
+        <button id="watchlist-check-alerts" class="btn subtle">Check Alerts</button>
+      </div>
+      <div class="watchlist-rule-builder">
+        <select id="watchlist-metric"></select>
+        <select id="watchlist-operator">
+          <option value=">">Above &gt;</option>
+          <option value="<">Below &lt;</option>
+        </select>
+        <input id="watchlist-threshold" type="number" step="any" placeholder="Threshold" />
+        <button id="watchlist-add-rule" class="btn subtle">Add Rule</button>
+      </div>
+      <div id="watchlist-rules" class="watchlist-rules"></div>
+      <div id="watchlist-countries" class="watchlist-countries"></div>
+      <div id="watchlist-alerts" class="watchlist-alerts"></div>
+    </section>
+
+    <section class="relocation-panel card">
+      <div class="section-head">
+        <h3>Relocation Planner</h3>
+        <p>Estimate monthly family budget and compare relocation fit across countries.</p>
+      </div>
+      <div class="relocation-controls">
+        <label>
+          Your monthly net income (USD)
+          <input id="relocate-income" type="number" min="0" step="50" placeholder="Optional" />
+        </label>
+        <label>
+          Adults
+          <select id="relocate-adults">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </label>
+        <label>
+          Children
+          <select id="relocate-children">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </label>
+        <label>
+          Lifestyle
+          <select id="relocate-lifestyle">
+            <option value="frugal">Frugal</option>
+            <option value="balanced" selected>Balanced</option>
+            <option value="comfortable">Comfortable</option>
+            <option value="premium">Premium</option>
+          </select>
+        </label>
+        <label>
+          Housing
+          <select id="relocate-housing">
+            <option value="modestRent">Modest Rent</option>
+            <option value="familyRent" selected>Family Rent</option>
+            <option value="centralRent">Central Rent</option>
+            <option value="ownHome">Own Home</option>
+          </select>
+        </label>
+        <label>
+          City tier
+          <select id="relocate-city-tier">
+            <option value="rural">Rural / small town</option>
+            <option value="secondary" selected>Secondary city</option>
+            <option value="major">Major city</option>
+            <option value="megacity">Megacity core</option>
+          </select>
+        </label>
+        <label>
+          Schooling
+          <select id="relocate-schooling">
+            <option value="public" selected>Public</option>
+            <option value="mixed">Mixed</option>
+            <option value="private">Private</option>
+            <option value="international">International</option>
+          </select>
+        </label>
+        <label>
+          Healthcare
+          <select id="relocate-healthcare">
+            <option value="public" selected>Public</option>
+            <option value="mixed">Mixed</option>
+            <option value="private">Private</option>
+            <option value="international">International</option>
+          </select>
+        </label>
+        <label>
+          Savings buffer %
+          <input id="relocate-buffer" type="number" min="0" max="100" step="1" value="15" />
+        </label>
+      </div>
+      <div class="relocation-country-controls">
+        <div class="relocate-country-picker">
+          <label for="relocate-countries">Countries to compare (2+)</label>
+          <select id="relocate-countries" multiple size="8"></select>
+        </div>
+        <div class="relocate-country-entry">
+          <label for="relocate-country-entry-input">Type countries (name or ISO3)</label>
+          <textarea
+            id="relocate-country-entry-input"
+            rows="8"
+            placeholder="e.g.\nOman, Pakistan, Norway\nor\nOMN\nPAK\nNOR"
+          ></textarea>
+          <button id="relocate-add-typed" class="btn subtle">Add Typed Countries</button>
+        </div>
+        <div class="relocate-country-actions">
+          <button id="relocate-use-current" class="btn subtle">Use Selected + Compare</button>
+          <button id="relocate-clear" class="btn subtle">Clear Selection</button>
+          <button id="relocate-run" class="btn subtle">Run Analysis</button>
+        </div>
+      </div>
+      <p id="relocate-meta" class="trend-meta"></p>
+      <div class="table-wrap">
+        <table id="relocate-table">
+          <thead>
+            <tr>
+              <th>Country</th>
+              <th>Req. Monthly (USD)</th>
+              <th>Req. Annual (USD)</th>
+              <th>Income Gap</th>
+              <th>Relocation Score</th>
+              <th>Verdict</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="source-box card">
+      <p><strong>Sources:</strong></p>
+      <ul>
+        <li><a href="https://restcountries.com/" target="_blank" rel="noreferrer">REST Countries</a> (country metadata)</li>
+        <li><a href="https://datahelpdesk.worldbank.org/knowledgebase/articles/889392-about-the-indicators-api-documentation" target="_blank" rel="noreferrer">World Bank Indicators API</a> (GDP, income, unemployment, poverty, Gini, tourism, military)</li>
+        <li><a href="https://www.imf.org/external/datamapper/api/" target="_blank" rel="noreferrer">IMF DataMapper API</a> (inflation, debt, current account)</li>
+        <li><a href="https://unstats.un.org/sdgs/UNSDGAPIV5/v1/sdg/Indicator/Data?indicator=16.1.1&pageSize=100" target="_blank" rel="noreferrer">UN SDG API</a> (crime rate trend, SDG 16.1.1)</li>
+        <li><a href="https://ghoapi.azureedge.net/api/" target="_blank" rel="noreferrer">WHO GHO API</a> (health indicators snapshot)</li>
+        <li><a href="https://gain-new.crc.nd.edu/about/download" target="_blank" rel="noreferrer">ND-GAIN</a> (climate vulnerability/readiness snapshot)</li>
+        <li><a href="https://data.humdata.org/dataset/emdat-country-profiles" target="_blank" rel="noreferrer">EM-DAT via HDX</a> (disaster profile snapshot)</li>
+        <li><a href="https://www.unwto.org/tourism-statistics" target="_blank" rel="noreferrer">UN Tourism (UNWTO)</a> (tourism methodology/source, surfaced through World Bank tourism indicators)</li>
+        <li><a href="https://openflights.org/data.php" target="_blank" rel="noreferrer">OpenFlights</a> (airlines and airports by country)</li>
+        <li><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo API</a> (live weather by country centroid)</li>
+        <li><a href="https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson" target="_blank" rel="noreferrer">Public World GeoJSON</a> (map geometry)</li>
+        <li><a href="https://news.google.com/" target="_blank" rel="noreferrer">Google News RSS</a> (country news)</li>
+      </ul>
+      <p class="source-note">Extended datasets (IMF, WHO, ND-GAIN, EM-DAT) are loaded as local snapshots to keep the UI fast. Visa/Residency path finder uses open regional mobility blocs plus country risk indicators as a pre-screen because no single free global visa policy API exists; always verify with official embassy/immigration portals. Relocation budget is an analytic estimate based on World Bank consumption/PPP proxies plus risk adjustments, not legal or financial advice. Military aircraft counts are not available from any free global public API, so this tool does not fabricate that metric.</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
