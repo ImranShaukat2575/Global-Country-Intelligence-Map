@@ -87,7 +87,7 @@ Then open:
 
 http://localhost:8000
 
-## Deployment
+Deployment
 This app can be deployed easily as a static site on platforms like:
 
 Vercel
