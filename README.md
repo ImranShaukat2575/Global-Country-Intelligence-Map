@@ -98,12 +98,12 @@ This tool is for informational and educational use only.
 It does not provide legal, immigration, financial, medical, or professional advice.
 Users should always verify important information through official and professional sources before making decisions.
 
-## Author
+Author
 Built from scratch by Imran Shaukat.
 
 I enjoyed building this project and plan to open-source it so others can improve it further.
 
-## You can also visit:
+You can also visit:
 
 ImranShaukat.com
 FreeCalculatorTool.com
