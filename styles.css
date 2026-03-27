@@ -60,6 +60,22 @@ body {
   transition: background 400ms ease, color 300ms ease;
 }
 
+.skip-nav {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  z-index: 9999;
+  padding: 0.5rem 1rem;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 0 0 8px 0;
+}
+.skip-nav:focus {
+  top: 0;
+}
+
 a {
   color: var(--accent-2);
 }
