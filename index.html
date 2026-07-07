@@ -118,6 +118,7 @@
               <button class="details-jump-link" data-target="job-fit-section">Jobs</button>
               <button class="details-jump-link" data-target="alternatives-section">Alternatives</button>
               <button class="details-jump-link" data-target="change-alerts-section">Alerts</button>
+              <button class="details-jump-link" data-target="osint-section">OSINT</button>
               <button class="details-jump-link" data-target="news-section">News</button>
             </div>
           </nav>
@@ -296,6 +297,30 @@
             </div>
             <div id="change-alerts-body" class="insight-list"></div>
             <p id="change-alerts-meta" class="trend-meta"></p>
+          </div>
+
+          <div id="osint-section" class="trend-block jump-target">
+            <div class="trend-title-row">
+              <h3>OSINT Situational Awareness</h3>
+              <button id="refresh-osint" class="btn subtle">Reload OSINT</button>
+            </div>
+            <div class="osint-grid">
+              <div class="osint-card">
+                <p class="osint-card-title">Live Seismic Activity · USGS</p>
+                <div id="osint-quake-body" class="osint-card-body">
+                  <p class="osint-empty">Select a country to load seismic activity.</p>
+                </div>
+                <p id="osint-quake-meta" class="trend-meta"></p>
+              </div>
+              <div class="osint-card">
+                <p class="osint-card-title">Media &amp; Geopolitical Signal · GDELT</p>
+                <div id="osint-signal-body" class="osint-card-body">
+                  <p class="osint-empty">Select a country to load media signal.</p>
+                </div>
+                <p id="osint-signal-meta" class="trend-meta"></p>
+              </div>
+            </div>
+            <p class="osint-disclaimer">Open-source situational awareness from public feeds. Country-level signals for analysis only — verify against official sources before acting.</p>
           </div>
 
           <div id="news-section" class="news-block jump-target">
@@ -531,6 +556,8 @@
         <li><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo API</a> (live weather by country centroid)</li>
         <li><a href="https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson" target="_blank" rel="noreferrer">Public World GeoJSON</a> (map geometry)</li>
         <li><a href="https://news.google.com/" target="_blank" rel="noreferrer">Google News RSS</a> (country news)</li>
+        <li><a href="https://earthquake.usgs.gov/fdsnws/event/1/" target="_blank" rel="noreferrer">USGS Earthquake API</a> (OSINT: live seismic activity near country centroid)</li>
+        <li><a href="https://api.gdeltproject.org/api/v2/doc/doc" target="_blank" rel="noreferrer">GDELT DOC 2.0 API</a> (OSINT: media attention volume and average tone)</li>
       </ul>
       <p class="source-note">Extended datasets (IMF, WHO, ND-GAIN, EM-DAT) are loaded as local snapshots to keep the UI fast. Visa/Residency path finder uses open regional mobility blocs plus country risk indicators as a pre-screen because no single free global visa policy API exists; always verify with official embassy/immigration portals. Relocation budget is an analytic estimate based on World Bank consumption/PPP proxies plus risk adjustments, not legal or financial advice. Military aircraft counts are not available from any free global public API, so this tool does not fabricate that metric.</p>
     </footer>

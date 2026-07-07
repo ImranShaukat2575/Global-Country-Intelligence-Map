@@ -37,6 +37,15 @@ const NEWS_DIRECT_FEEDS = [
 const NEWS_MAX_ARTICLES = 8;
 const NEWS_CACHE_TTL_MS = 15 * 60 * 1000;
 const WEATHER_CACHE_TTL_MS = 10 * 60 * 1000;
+// OSINT situational awareness: keyless, CORS-friendly open sources.
+const USGS_EARTHQUAKE_URL = "https://earthquake.usgs.gov/fdsnws/event/1/query";
+const GDELT_DOC_URL = "https://api.gdeltproject.org/api/v2/doc/doc";
+const OSINT_CACHE_TTL_MS = 30 * 60 * 1000;
+const OSINT_QUAKE_RADIUS_KM = 1000;
+const OSINT_QUAKE_MIN_MAG = 2.5;
+const OSINT_QUAKE_DAYS = 30;
+const OSINT_QUAKE_MAX_ROWS = 6;
+const GDELT_TIMESPAN = "3w";
 const SNAPSHOT_STATE_VERSION = "1";
 const WATCHLIST_STORAGE_KEY = "countryIntelligenceWatchlistV1";
 const CURRENT_YEAR = new Date().getFullYear();
@@ -512,6 +521,8 @@ const state = {
   newsCache: new Map(),
   weatherCache: new Map(),
   weatherInFlight: new Map(),
+  osintCache: new Map(),
+  osintInFlight: new Map(),
   imfForecastByMetric: {
     inflation: new Map(),
     debtPctGdp: new Map(),
@@ -639,6 +650,11 @@ const ui = {
   refreshChangeAlerts: document.getElementById("refresh-change-alerts"),
   changeAlertsBody: document.getElementById("change-alerts-body"),
   changeAlertsMeta: document.getElementById("change-alerts-meta"),
+  refreshOsint: document.getElementById("refresh-osint"),
+  osintQuakeBody: document.getElementById("osint-quake-body"),
+  osintQuakeMeta: document.getElementById("osint-quake-meta"),
+  osintSignalBody: document.getElementById("osint-signal-body"),
+  osintSignalMeta: document.getElementById("osint-signal-meta"),
   refreshNews: document.getElementById("refresh-news"),
   newsList: document.getElementById("news-list"),
   newsMeta: document.getElementById("news-meta"),
@@ -1674,6 +1690,27 @@ function setupControls() {
       }
       if (state.selectedIso3 === iso3) {
         renderWeatherBlock(iso3);
+      }
+    });
+  }
+
+  if (ui.refreshOsint) {
+    ui.refreshOsint.addEventListener("click", async () => {
+      const iso3 = state.selectedIso3;
+      if (!iso3) return;
+      if (ui.osintQuakeBody) {
+        ui.osintQuakeBody.innerHTML = '<p class="osint-loading">Refreshing USGS seismic feed…</p>';
+      }
+      if (ui.osintSignalBody) {
+        ui.osintSignalBody.innerHTML = '<p class="osint-loading">Refreshing GDELT media signal…</p>';
+      }
+      try {
+        await loadCountryOsint(iso3, true);
+      } catch (error) {
+        console.warn("OSINT refresh failed:", error);
+      }
+      if (state.selectedIso3 === iso3) {
+        renderOsintBlock(iso3);
       }
     });
   }
@@ -3800,6 +3837,7 @@ function renderCountryDetails() {
   renderJobMarketFit(trendIso3);
   renderBestAlternatives(trendIso3);
   renderCountryChangeAlerts(trendIso3);
+  renderOsintBlock(trendIso3);
 
   // News
   const newsIso3 = country.iso3;
@@ -6242,4 +6280,315 @@ function formatNewsDate(dateString) {
   } catch {
     return "";
   }
+}
+
+/* =========================================================================
+ * OSINT situational awareness
+ * Aggregates open, public country-level signals for defensive/analytical
+ * situational awareness. All sources are keyless and CORS-friendly:
+ *   - USGS FDSN event API: recent seismic activity near the country centroid.
+ *   - GDELT DOC 2.0 API: media attention volume + average tone (sentiment).
+ * ========================================================================= */
+
+function renderOsintBlock(iso3) {
+  if (!ui.osintQuakeBody || !ui.osintSignalBody) return;
+
+  const country = getCountryByIso3(iso3);
+  if (!country) {
+    ui.osintQuakeBody.innerHTML = '<p class="osint-empty">Select a country to load seismic activity.</p>';
+    ui.osintSignalBody.innerHTML = '<p class="osint-empty">Select a country to load media signal.</p>';
+    if (ui.osintQuakeMeta) ui.osintQuakeMeta.textContent = "";
+    if (ui.osintSignalMeta) ui.osintSignalMeta.textContent = "";
+    return;
+  }
+
+  const entry = state.osintCache.get(iso3);
+  const isFresh = entry && Date.now() - entry.fetchedAt <= OSINT_CACHE_TTL_MS;
+
+  if (entry) {
+    renderOsintQuakes(country, entry.quakes, isFresh);
+    renderOsintSignal(country, entry.signal, isFresh);
+
+    // Refresh stale cache in the background without blocking the UI.
+    if (!isFresh && !state.osintInFlight.has(iso3)) {
+      void loadCountryOsint(iso3, true)
+        .then(() => {
+          if (state.selectedIso3 === iso3) renderOsintBlock(iso3);
+        })
+        .catch((error) => {
+          console.warn("Background OSINT refresh failed:", error);
+        });
+    }
+    return;
+  }
+
+  ui.osintQuakeBody.innerHTML = '<p class="osint-loading">Scanning USGS seismic feed…</p>';
+  ui.osintSignalBody.innerHTML = '<p class="osint-loading">Querying GDELT media signal…</p>';
+  if (ui.osintQuakeMeta) ui.osintQuakeMeta.textContent = "";
+  if (ui.osintSignalMeta) ui.osintSignalMeta.textContent = "";
+
+  void loadCountryOsint(iso3, false)
+    .then(() => {
+      if (state.selectedIso3 === iso3) renderOsintBlock(iso3);
+    })
+    .catch((error) => {
+      if (state.selectedIso3 !== iso3) return;
+      ui.osintQuakeBody.innerHTML = '<p class="osint-empty">Seismic feed unavailable right now.</p>';
+      ui.osintSignalBody.innerHTML = '<p class="osint-empty">Media signal unavailable right now.</p>';
+      if (ui.osintQuakeMeta) ui.osintQuakeMeta.textContent = error.message || "";
+    });
+}
+
+async function loadCountryOsint(iso3, force = false) {
+  if (!iso3) throw new Error("Missing country for OSINT request.");
+  const country = getCountryByIso3(iso3);
+  if (!country) throw new Error("Country not found.");
+
+  const cached = state.osintCache.get(iso3);
+  if (!force && cached && Date.now() - cached.fetchedAt <= OSINT_CACHE_TTL_MS) {
+    return cached;
+  }
+  if (!force && state.osintInFlight.has(iso3)) {
+    return state.osintInFlight.get(iso3);
+  }
+
+  const request = (async () => {
+    const [quakeRes, signalRes] = await Promise.allSettled([
+      fetchOsintQuakes(country),
+      fetchOsintSignal(country)
+    ]);
+
+    const entry = {
+      quakes:
+        quakeRes.status === "fulfilled"
+          ? { data: quakeRes.value, error: null }
+          : { data: null, error: quakeRes.reason?.message || "unavailable" },
+      signal:
+        signalRes.status === "fulfilled"
+          ? { data: signalRes.value, error: null }
+          : { data: null, error: signalRes.reason?.message || "unavailable" },
+      fetchedAt: Date.now()
+    };
+    state.osintCache.set(iso3, entry);
+    return entry;
+  })().finally(() => {
+    state.osintInFlight.delete(iso3);
+  });
+
+  state.osintInFlight.set(iso3, request);
+  return request;
+}
+
+async function fetchOsintQuakes(country) {
+  const latitude = Number(country.latlng?.[0]);
+  const longitude = Number(country.latlng?.[1]);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    throw new Error("No coordinates available for seismic lookup.");
+  }
+
+  const start = new Date(Date.now() - OSINT_QUAKE_DAYS * 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const params = new URLSearchParams({
+    format: "geojson",
+    latitude: String(latitude),
+    longitude: String(longitude),
+    maxradiuskm: String(OSINT_QUAKE_RADIUS_KM),
+    starttime: start,
+    minmagnitude: String(OSINT_QUAKE_MIN_MAG),
+    orderby: "time",
+    limit: "20"
+  });
+
+  const payload = await fetchJson(`${USGS_EARTHQUAKE_URL}?${params.toString()}`, 15000);
+  if (!payload || !Array.isArray(payload.features)) {
+    throw new Error("Malformed USGS response.");
+  }
+  return payload.features;
+}
+
+async function fetchOsintSignal(country) {
+  const query = `"${country.name}"`;
+  const buildUrl = (mode) => {
+    const params = new URLSearchParams({
+      query,
+      mode,
+      timespan: GDELT_TIMESPAN,
+      format: "json"
+    });
+    return `${GDELT_DOC_URL}?${params.toString()}`;
+  };
+
+  const [volRes, toneRes] = await Promise.allSettled([
+    fetchJsonWithProxyFallback(buildUrl("timelinevol")),
+    fetchJsonWithProxyFallback(buildUrl("timelinetone"))
+  ]);
+
+  const volSeries =
+    volRes.status === "fulfilled" ? volRes.value?.timeline?.[0]?.data ?? [] : [];
+  const toneSeries =
+    toneRes.status === "fulfilled" ? toneRes.value?.timeline?.[0]?.data ?? [] : [];
+
+  if (!volSeries.length && !toneSeries.length) {
+    throw new Error("No GDELT signal returned.");
+  }
+  return { volSeries, toneSeries };
+}
+
+async function fetchJsonWithProxyFallback(url, timeoutMs = 12000) {
+  const attempts = [
+    url,
+    `${NEWS_CORS_PROXY}${encodeURIComponent(url)}`,
+    `${ALLORIGINS_PROXY}${encodeURIComponent(url)}`
+  ];
+  let lastError;
+  for (const attempt of attempts) {
+    try {
+      const payload = await fetchJson(attempt, timeoutMs);
+      if (payload != null) return payload;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError ?? new Error("All fetch attempts failed.");
+}
+
+function renderOsintQuakes(country, quakeState, isFresh) {
+  if (!ui.osintQuakeBody) return;
+
+  if (quakeState.error && !quakeState.data) {
+    ui.osintQuakeBody.innerHTML = '<p class="osint-empty">Seismic feed unavailable right now.</p>';
+    if (ui.osintQuakeMeta) ui.osintQuakeMeta.textContent = `USGS request failed: ${quakeState.error}`;
+    return;
+  }
+
+  const features = quakeState.data ?? [];
+  if (!features.length) {
+    ui.osintQuakeBody.innerHTML = `<p class="osint-empty">No M${OSINT_QUAKE_MIN_MAG}+ quakes within ${OSINT_QUAKE_RADIUS_KM} km in the last ${OSINT_QUAKE_DAYS} days.</p>`;
+    if (ui.osintQuakeMeta) {
+      ui.osintQuakeMeta.textContent = `${isFresh ? "Live" : "Cached"} · USGS · ${OSINT_QUAKE_RADIUS_KM} km radius, ${OSINT_QUAKE_DAYS}-day window.`;
+    }
+    return;
+  }
+
+  const mags = features
+    .map((f) => Number(f.properties?.mag))
+    .filter((m) => Number.isFinite(m));
+  const maxMag = mags.length ? Math.max(...mags) : null;
+
+  const summary = `
+    <div class="osint-stat-row">
+      <div class="osint-stat">
+        <div class="osint-stat-v">${features.length}</div>
+        <div class="osint-stat-k">Events / ${OSINT_QUAKE_DAYS}d</div>
+      </div>
+      <div class="osint-stat">
+        <div class="osint-stat-v">${maxMag != null ? `M${maxMag.toFixed(1)}` : "—"}</div>
+        <div class="osint-stat-k">Strongest</div>
+      </div>
+    </div>`;
+
+  const rows = features
+    .slice(0, OSINT_QUAKE_MAX_ROWS)
+    .map((f) => {
+      const mag = Number(f.properties?.mag);
+      const magLabel = Number.isFinite(mag) ? mag.toFixed(1) : "?";
+      const place = escapeHtml(String(f.properties?.place ?? "Unknown location"));
+      const when = f.properties?.time ? formatNewsDate(new Date(Number(f.properties.time)).toISOString()) : "";
+      const link = escapeHtml(String(f.properties?.url ?? "#"));
+      return `
+        <a class="osint-quake-row" href="${link}" target="_blank" rel="noreferrer noopener">
+          <span class="osint-mag ${quakeMagClass(mag)}">${magLabel}</span>
+          <span class="osint-quake-place">${place}</span>
+          <span class="osint-quake-when">${escapeHtml(when)}</span>
+        </a>`;
+    })
+    .join("");
+
+  ui.osintQuakeBody.innerHTML = summary + `<div class="osint-quake-list">${rows}</div>`;
+  if (ui.osintQuakeMeta) {
+    ui.osintQuakeMeta.textContent = `${isFresh ? "Live" : "Cached"} · USGS FDSN · within ${OSINT_QUAKE_RADIUS_KM} km of ${country.name}.`;
+  }
+}
+
+function quakeMagClass(mag) {
+  if (!Number.isFinite(mag)) return "mag-low";
+  if (mag >= 6) return "mag-high";
+  if (mag >= 4.5) return "mag-mid";
+  return "mag-low";
+}
+
+function renderOsintSignal(country, signalState, isFresh) {
+  if (!ui.osintSignalBody) return;
+
+  if (signalState.error && !signalState.data) {
+    ui.osintSignalBody.innerHTML = '<p class="osint-empty">Media signal unavailable right now.</p>';
+    if (ui.osintSignalMeta) ui.osintSignalMeta.textContent = `GDELT request failed: ${signalState.error}`;
+    return;
+  }
+
+  const volSeries = (signalState.data?.volSeries ?? []).filter((p) => Number.isFinite(Number(p?.value)));
+  const toneSeries = (signalState.data?.toneSeries ?? []).filter((p) => Number.isFinite(Number(p?.value)));
+
+  if (!volSeries.length && !toneSeries.length) {
+    ui.osintSignalBody.innerHTML = '<p class="osint-empty">No recent media signal found for this country.</p>';
+    if (ui.osintSignalMeta) {
+      ui.osintSignalMeta.textContent = `${isFresh ? "Live" : "Cached"} · GDELT · past ${GDELT_TIMESPAN}.`;
+    }
+    return;
+  }
+
+  const attentionTrend = seriesTrend(volSeries);
+  const latestVol = volSeries.length ? Number(volSeries[volSeries.length - 1].value) : null;
+  const avgTone = toneSeries.length
+    ? toneSeries.reduce((sum, p) => sum + Number(p.value), 0) / toneSeries.length
+    : null;
+
+  const toneMeta = toneSentiment(avgTone);
+  const sparkPoints = volSeries.map((p) => ({ value: Number(p.value) }));
+  const spark = sparkPoints.length >= 2 ? renderSparkline(sparkPoints) : "";
+
+  ui.osintSignalBody.innerHTML = `
+    <div class="osint-signal-grid">
+      <div class="osint-signal-metric">
+        <div class="osint-signal-k">Media attention</div>
+        <div class="osint-signal-v">${latestVol != null ? `${(latestVol).toFixed(2)}%` : "—"} <span class="osint-trend ${attentionTrend.dir}">${attentionTrend.label}</span></div>
+        <div class="osint-spark">${spark}</div>
+      </div>
+      <div class="osint-signal-metric">
+        <div class="osint-signal-k">Average tone</div>
+        <div class="osint-signal-v">${avgTone != null ? avgTone.toFixed(2) : "—"} <span class="osint-tone ${toneMeta.cls}">${toneMeta.label}</span></div>
+        <div class="osint-signal-note">${toneMeta.note}</div>
+      </div>
+    </div>`;
+
+  if (ui.osintSignalMeta) {
+    ui.osintSignalMeta.textContent = `${isFresh ? "Live" : "Cached"} · GDELT DOC 2.0 · ${country.name}, past ${GDELT_TIMESPAN}. Tone scale ≈ −10 (negative) to +10 (positive).`;
+  }
+}
+
+function seriesTrend(series) {
+  if (!series || series.length < 2) return { dir: "flat", label: "—" };
+  const n = Math.min(3, Math.floor(series.length / 2));
+  const head = series.slice(0, n).reduce((s, p) => s + Number(p.value), 0) / n;
+  const tail = series.slice(-n).reduce((s, p) => s + Number(p.value), 0) / n;
+  const delta = tail - head;
+  if (Math.abs(delta) < 1e-6 || head === 0) return { dir: "flat", label: "steady" };
+  const pct = (delta / Math.abs(head)) * 100;
+  if (pct > 10) return { dir: "up", label: `▲ ${Math.round(pct)}%` };
+  if (pct < -10) return { dir: "down", label: `▼ ${Math.round(Math.abs(pct))}%` };
+  return { dir: "flat", label: "steady" };
+}
+
+function toneSentiment(avgTone) {
+  if (avgTone == null || !Number.isFinite(avgTone)) {
+    return { cls: "tone-neutral", label: "N/A", note: "Tone not available." };
+  }
+  if (avgTone >= 1) {
+    return { cls: "tone-pos", label: "Positive", note: "Coverage skews favorable." };
+  }
+  if (avgTone <= -1) {
+    return { cls: "tone-neg", label: "Negative", note: "Coverage skews adverse." };
+  }
+  return { cls: "tone-neutral", label: "Neutral", note: "Coverage broadly balanced." };
 }

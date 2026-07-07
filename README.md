@@ -14,6 +14,7 @@ A standalone HTML/CSS/JS app for interactive country analytics with real public 
 - GDP trend chart (2000 to latest available year)
 - Crime trend chart from UN SDG API (indicator 16.1.1)
 - Live weather panel on country click (Open-Meteo current conditions)
+- OSINT situational awareness panel: live seismic activity near the country (USGS) + media attention volume and average tone/sentiment (GDELT)
 - Forecast mode panel (IMF projected series when available + linear fallback)
 - Alert watchlists with user-defined threshold rules (saved in localStorage)
 - Country change alerts scanner (selected country + watchlist, year-over-year triggers)
@@ -39,6 +40,8 @@ A standalone HTML/CSS/JS app for interactive country analytics with real public 
 - UN Tourism (UNWTO): tourism source methodology (surfaced via World Bank tourism indicators)
 - OpenFlights open dataset: airlines and airports by country
 - Open-Meteo API: live weather by country centroid coordinates
+- USGS Earthquake (FDSN) API: OSINT live seismic activity near country centroid
+- GDELT DOC 2.0 API: OSINT media attention volume and average tone by country
 - Public world GeoJSON datasets: map geometry
 - Regional mobility bloc definitions (EU/EEA/CH, GCC, MERCOSUR, ECOWAS, CARICOM): used for visa/residency pre-screen context
 
@@ -61,6 +64,12 @@ A standalone HTML/CSS/JS app for interactive country analytics with real public 
 - There is no single free, complete global API for visa + long-term residency policy across all countries.
 - The tool therefore provides a **pre-screen score** from regional mobility blocs plus open destination indicators.
 - Treat it as decision support only and confirm final requirements with official immigration/embassy sources.
+
+## OSINT panel note
+- The OSINT (open-source intelligence) panel aggregates **open, public, country-level** signals for defensive/analytical situational awareness only.
+- Seismic data is pulled live from the USGS FDSN event API (quakes within ~1000 km of the country centroid over the last 30 days).
+- Media signal is pulled from the GDELT DOC 2.0 API (news attention volume and average tone over the past few weeks); it may fall back through public CORS proxies.
+- Both sources are keyless and best-effort — treat them as decision support and verify against official sources.
 
 ## Run locally
 1. Start a local static server in this folder:
