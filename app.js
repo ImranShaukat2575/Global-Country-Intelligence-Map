@@ -29,11 +29,25 @@ const LOCAL_SNAPSHOT_URLS = {
 };
 const NEWS_RSS2JSON = "https://api.rss2json.com/v1/api.json?rss_url=";
 const GOOGLE_NEWS_RSS = "https://news.google.com/rss/search";
+// Fallback world RSS feeds, tagged by REST Countries `region` for relevance.
+// "global" feeds broadly cover any country; regional feeds fill coverage gaps
+// (esp. Africa/Asia) that the global outlets rarely name. To respect rss2json
+// rate limits, only a capped, regionally-ranked subset fires per fallback.
 const NEWS_DIRECT_FEEDS = [
-  { name: "BBC News", url: "http://feeds.bbci.co.uk/news/world/rss.xml" },
-  { name: "CNN", url: "http://rss.cnn.com/rss/edition_world.rss" },
-  { name: "Al Jazeera", url: "https://www.aljazeera.com/xml/rss/all.xml" }
+  { name: "BBC News", url: "http://feeds.bbci.co.uk/news/world/rss.xml", regions: ["global"] },
+  { name: "CNN", url: "http://rss.cnn.com/rss/edition_world.rss", regions: ["global"] },
+  { name: "Al Jazeera", url: "https://www.aljazeera.com/xml/rss/all.xml", regions: ["global"] },
+  { name: "The Guardian", url: "https://www.theguardian.com/world/rss", regions: ["global"] },
+  { name: "Deutsche Welle", url: "https://rss.dw.com/rdf/rss-en-world", regions: ["global", "Europe"] },
+  { name: "NPR World", url: "https://feeds.npr.org/1004/rss.xml", regions: ["global", "Americas"] },
+  { name: "UN News", url: "https://news.un.org/feed/subscribe/en/news/all/rss.xml", regions: ["global"] },
+  { name: "France 24", url: "https://www.france24.com/en/rss", regions: ["Africa", "Europe"] },
+  { name: "AllAfrica", url: "https://allafrica.com/tools/headlines/rdf/latest/headlines.rdf", regions: ["Africa"] },
+  { name: "South China Morning Post", url: "https://www.scmp.com/rss/91/feed", regions: ["Asia", "Oceania"] },
+  { name: "The Times of India", url: "https://timesofindia.indiatimes.com/rssfeedstopstories.cms", regions: ["Asia"] },
+  { name: "CBC World", url: "https://www.cbc.ca/webfeed/rss/rss-world", regions: ["Americas"] }
 ];
+const NEWS_FALLBACK_MAX_FEEDS = 6;
 const NEWS_MAX_ARTICLES = 8;
 const NEWS_CACHE_TTL_MS = 15 * 60 * 1000;
 const WEATHER_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -6129,6 +6143,25 @@ function debounce(fn, waitMs) {
 
 /* ── News (RSS) ─────────────────────────────────────────── */
 
+// Rank fallback feeds by relevance to the country's region, then fill with
+// global outlets, capped at NEWS_FALLBACK_MAX_FEEDS to respect proxy limits.
+function selectNewsFeeds(country) {
+  const region = country?.region || "";
+  const scored = NEWS_DIRECT_FEEDS.map((feed) => {
+    let score = 0;
+    if (region && feed.regions.includes(region)) score += 2;
+    if (feed.regions.includes("global")) score += 1;
+    return { feed, score };
+  }).filter((entry) => entry.score > 0);
+
+  // Array#sort is stable, so equal-score feeds keep their declaration order
+  // (BBC/CNN/Al Jazeera stay the reliable anchors among globals).
+  scored.sort((a, b) => b.score - a.score);
+
+  const selected = scored.slice(0, NEWS_FALLBACK_MAX_FEEDS).map((entry) => entry.feed);
+  return selected.length ? selected : NEWS_DIRECT_FEEDS.slice(0, NEWS_FALLBACK_MAX_FEEDS);
+}
+
 async function loadCountryNews(iso3, force = false, onProgress = () => {}) {
   if (!iso3) return;
   const cached = state.newsCache.get(iso3);
@@ -6156,18 +6189,21 @@ async function loadCountryNews(iso3, force = false, onProgress = () => {}) {
     console.warn("Google News RSS proxy failed:", err.message);
   }
 
-  // Strategy 2: Fetch multiple feeds via rss2json, filter by country name
+  // Strategy 2: Fetch a regionally-relevant set of world feeds via rss2json,
+  // filter by country name.
   if (!articles.length) {
-    onProgress(30, "Trying BBC, CNN, Al Jazeera feeds\u2026");
+    const feeds = selectNewsFeeds(country);
+    const feedNames = feeds.map((f) => f.name).join(", ");
+    onProgress(30, `Trying ${feedNames} feeds\u2026`);
     try {
       const countryLower = country.name.toLowerCase();
       let completed = 0;
-      const feedPromises = NEWS_DIRECT_FEEDS.map(async (feed) => {
+      const feedPromises = feeds.map(async (feed) => {
         try {
           const data = await fetchJson(`${NEWS_RSS2JSON}${encodeURIComponent(feed.url)}`);
           completed++;
-          onProgress(30 + Math.round((completed / NEWS_DIRECT_FEEDS.length) * 50),
-            `Loaded ${feed.name} (${completed}/${NEWS_DIRECT_FEEDS.length})\u2026`);
+          onProgress(30 + Math.round((completed / feeds.length) * 50),
+            `Loaded ${feed.name} (${completed}/${feeds.length})\u2026`);
           if (data.status === "ok" && Array.isArray(data.items)) {
             return data.items.map((item) => ({
               ...normalizeRss2JsonItem(item),
@@ -6176,7 +6212,7 @@ async function loadCountryNews(iso3, force = false, onProgress = () => {}) {
           }
         } catch (e) {
           completed++;
-          onProgress(30 + Math.round((completed / NEWS_DIRECT_FEEDS.length) * 50),
+          onProgress(30 + Math.round((completed / feeds.length) * 50),
             `${feed.name} unavailable, continuing\u2026`);
           console.warn(`RSS feed ${feed.name} failed:`, e.message);
         }
@@ -6206,7 +6242,7 @@ function renderNewsBlock(iso3) {
 
   if (!articles.length) {
     ui.newsList.innerHTML = '<p class="news-empty">No recent news found for this country.</p>';
-    ui.newsMeta.textContent = "Powered by RSS feeds from BBC, CNN, Al Jazeera.";
+    ui.newsMeta.textContent = "Powered by Google News plus regional RSS feeds (BBC, CNN, Al Jazeera, Guardian, DW, France 24, AllAfrica, SCMP, and more).";
     return;
   }
 

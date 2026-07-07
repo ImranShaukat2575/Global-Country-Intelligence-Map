@@ -43,6 +43,7 @@ A standalone HTML/CSS/JS app for interactive country analytics with real public 
 - USGS Earthquake (FDSN) API: OSINT live seismic activity near country centroid
 - GDELT DOC 2.0 API: OSINT media attention volume and average tone by country
 - Public world GeoJSON datasets: map geometry
+- News: Google News RSS (primary, country-specific search) plus a region-ranked, country-filtered RSS fallback across BBC, CNN, Al Jazeera, The Guardian, Deutsche Welle, NPR, UN News, France 24, AllAfrica, South China Morning Post, The Times of India, and CBC
 - Regional mobility bloc definitions (EU/EEA/CH, GCC, MERCOSUR, ECOWAS, CARICOM): used for visa/residency pre-screen context
 
 ## Net worth note
