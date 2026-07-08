@@ -975,13 +975,12 @@ async function fetchIndicatorAllYears(indicatorCode) {
 }
 
 async function loadCountryProfiles() {
+  // REST Countries `/v3.1/all` now 301-redirects to a host that sends no CORS
+  // headers, so a direct browser fetch is blocked. Try direct first (fast path
+  // when it works), then public CORS proxies (which follow the redirect
+  // server-side), and finally fall back to the World Bank country endpoint.
   try {
-    const [part1, part2] = await Promise.all([
-      fetchJson(REST_COUNTRIES_URL_P1),
-      fetchJson(REST_COUNTRIES_URL_P2)
-    ]);
-    const part2Map = new Map(part2.map((c) => [c.cca3, c]));
-    return part1.map((c) => ({ ...c, ...(part2Map.get(c.cca3) ?? {}) }));
+    return await fetchRestCountriesProfiles();
   } catch (restError) {
     console.warn("REST Countries failed, falling back to World Bank country endpoint.", restError);
     setStatus("REST Countries unavailable. Falling back to World Bank country profiles...");
@@ -989,6 +988,18 @@ async function loadCountryProfiles() {
     const wbRows = Array.isArray(wbPayload) ? wbPayload[1] ?? [] : [];
     return transformWorldBankCountriesToRestLike(wbRows);
   }
+}
+
+async function fetchRestCountriesProfiles() {
+  const [part1, part2] = await Promise.all([
+    fetchJsonWithProxyFallback(REST_COUNTRIES_URL_P1, 20000),
+    fetchJsonWithProxyFallback(REST_COUNTRIES_URL_P2, 20000)
+  ]);
+  if (!Array.isArray(part1) || !Array.isArray(part2) || !part1.length) {
+    throw new Error("Malformed REST Countries response.");
+  }
+  const part2Map = new Map(part2.map((c) => [c.cca3, c]));
+  return part1.map((c) => ({ ...c, ...(part2Map.get(c.cca3) ?? {}) }));
 }
 
 async function loadBackgroundWorldBankIndicatorsSafely() {
